@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: opentofu
+    directories:
+      - /service/*
+      - /app/*
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      providers:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps
