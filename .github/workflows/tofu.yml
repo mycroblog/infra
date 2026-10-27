@@ -108,7 +108,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
         run: |
           set +e
-          tofu plan -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
+          tofu plan -lock=false -no-color -concise -detailed-exitcode > plan.txt 2>&1
           code=$?
           cat plan.txt
           echo "exitcode=$code" >> "$GITHUB_OUTPUT"
@@ -208,4 +208,4 @@ jobs:
       - env:
           CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
           GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
-        run: tofu apply -auto-approve -no-color
+        run: tofu apply -auto-approve -no-color -concise
