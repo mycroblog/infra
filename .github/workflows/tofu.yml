@@ -14,6 +14,7 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   GCP_PROJECT_ID: mycroblog
+  TFSTATE_BUCKET: mycroblog-tfstate
 
 # 外部サービスの認証情報は GitHub Secrets には置かず、GCP Secret Manager から取得する。
 # plan は PR から実行されるため、読み取り専用の SA / 認証情報のみを使う。
@@ -100,6 +101,14 @@ jobs:
           client-id: ${{ vars.TOFU_GITHUB_PLAN_APP_CLIENT_ID }}
           private-key: ${{ steps.github-app-key.outputs.private-key }}
           owner: ${{ github.repository_owner }}
+      # plan 用 SA は state を作成できないため、未 apply のディレクトリはローカルの空 state で plan する
+      - env:
+          DIR: ${{ matrix.dir }}
+        run: |
+          if ! gcloud storage objects describe "gs://${TFSTATE_BUCKET}/${DIR}/default.tfstate" > /dev/null 2>&1; then
+            echo "::notice::${DIR} の state が存在しないため、空の state で plan します"
+            printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
+          fi
       - run: tofu init
       - run: tofu validate -no-color
       - id: plan
@@ -108,7 +117,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
         run: |
           set +e
-          tofu plan -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
+          tofu plan -lock=false -no-color -concise -detailed-exitcode > plan.txt 2>&1
           code=$?
           cat plan.txt
           echo "exitcode=$code" >> "$GITHUB_OUTPUT"
@@ -208,4 +217,4 @@ jobs:
       - env:
           CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
           GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
-        run: tofu apply -auto-approve -no-color
+        run: tofu apply -auto-approve -no-color -concise
