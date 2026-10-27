@@ -53,6 +53,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-tofu
       - run: tofu fmt -check -recursive -diff
+      # 暗号化設定が全ルートモジュールに同一内容で置かれていることを確認する
+      - run: |
+          status=0
+          for d in $(find service app -mindepth 2 -maxdepth 2 -name '*.tf' -printf '%h\n' | sort -u); do
+            if ! cmp -s service/gcp/encryption.tf "$d/encryption.tf"; then
+              echo "::error file=$d/encryption.tf::service/gcp/encryption.tf と同一内容の encryption.tf が必要です"
+              status=1
+            fi
+          done
+          exit $status
 
   plan:
     needs: [changes]
