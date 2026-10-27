@@ -5,8 +5,10 @@
 
 locals {
   github_repository = "mycroblog/infra"
-  # リポジトリ名の再利用対策として、オーナーを ID で固定する
-  github_owner_id = "346242925"
+  # リポジトリ名の変更・再利用対策として ID で照合する
+  github_repository_id = "1435572834"
+  # immutable subject が有効なため、sub は `repo:<owner>@<owner_id>/<repo>@<repo_id>:...` 形式になる
+  github_subject_prefix = "repo:mycroblog@346242925/infra@${local.github_repository_id}"
 
   tofu_plan_roles = [
     "roles/viewer",
@@ -46,7 +48,7 @@ resource "google_iam_workload_identity_pool_provider" "github_actions" {
     "attribute.repository" = "assertion.repository"
     "attribute.ref"        = "assertion.ref"
   }
-  attribute_condition = "assertion.repository_owner_id == \"${local.github_owner_id}\" && assertion.repository == \"${local.github_repository}\""
+  attribute_condition = "assertion.repository_id == \"${local.github_repository_id}\""
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -76,7 +78,7 @@ resource "google_service_account_iam_member" "tofu_plan_github" {
 resource "google_service_account_iam_member" "tofu_apply_github" {
   service_account_id = google_service_account.tofu_apply.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/subject/repo:${local.github_repository}:environment:production"
+  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/subject/${local.github_subject_prefix}:environment:production"
 }
 
 resource "google_project_iam_member" "tofu_plan" {
