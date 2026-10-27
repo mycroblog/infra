@@ -1,0 +1,12 @@
+name: Setup OpenTofu
+description: .tool-versions で指定されたバージョンの OpenTofu をセットアップする
+runs:
+  using: composite
+  steps:
+    - id: version
+      shell: bash
+      run: echo "version=$(awk '$1 == "opentofu" { print $2 }' .tool-versions)" >> "$GITHUB_OUTPUT"
+    - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      with:
+        tofu_version: ${{ steps.version.outputs.version }}
+        tofu_wrapper: false

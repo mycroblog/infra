@@ -1,0 +1,211 @@
+name: OpenTofu
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  GCP_PROJECT_ID: mycroblog
+
+# 外部サービスの認証情報は GitHub Secrets には置かず、GCP Secret Manager から取得する。
+# plan は PR から実行されるため、読み取り専用の SA / 認証情報のみを使う。
+# apply 用の SA / 認証情報は production environment (main ブランチ限定) からのみ利用できる。
+jobs:
+  # 変更のあったルートモジュール (service/*, app/*) を列挙する。
+  # workflow 自体や .tool-versions が変わった場合、手動実行の場合は全ディレクトリが対象。
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dirs: ${{ steps.dirs.outputs.dirs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: dirs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          all=$(find service app -mindepth 2 -maxdepth 2 -name '*.tf' -printf '%h\n' | sort -u)
+          if [ "$EVENT_NAME" = workflow_dispatch ] || ! changed=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null); then
+            dirs="$all"
+          elif grep -qE '^(\.github/(workflows/tofu\.yml|actions/setup-tofu/)|\.tool-versions$)' <<<"$changed"; then
+            dirs="$all"
+          else
+            dirs=$(grep -oE '^(service|app)/[^/]+/' <<<"$changed" | sed 's|/$||' | sort -u | grep -Fx -f <(echo "$all") || true)
+          fi
+          echo "$dirs"
+          echo "dirs=$(jq -cnR '[inputs | select(length > 0)]' <<<"$dirs")" >> "$GITHUB_OUTPUT"
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-tofu
+      - run: tofu fmt -check -recursive -diff
+
+  plan:
+    needs: [changes]
+    # fork からの PR には OIDC トークンが発行されないため実行しない
+    if: >-
+      github.event_name != 'push' &&
+      needs.changes.outputs.dirs != '[]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJSON(needs.changes.outputs.dirs) }}
+    concurrency:
+      group: tofu-plan-${{ github.ref }}-${{ matrix.dir }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-tofu
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: tofu-plan@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+      - id: secrets
+        uses: google-github-actions/get-secretmanager-secrets@bc9c54b29fdffb8a47776820a7d26e77b379d262 # v3.0.0
+        with:
+          secrets: |-
+            cloudflare-api-token:${{ env.GCP_PROJECT_ID }}/cloudflare-api-token-plan
+      - id: github-app-key
+        if: vars.TOFU_GITHUB_PLAN_APP_CLIENT_ID != ''
+        uses: google-github-actions/get-secretmanager-secrets@bc9c54b29fdffb8a47776820a7d26e77b379d262 # v3.0.0
+        with:
+          secrets: |-
+            private-key:${{ env.GCP_PROJECT_ID }}/github-app-private-key-plan
+      - id: github-app
+        if: steps.github-app-key.outcome == 'success'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.TOFU_GITHUB_PLAN_APP_CLIENT_ID }}
+          private-key: ${{ steps.github-app-key.outputs.private-key }}
+          owner: ${{ github.repository_owner }}
+      - run: tofu init
+      - run: tofu validate -no-color
+      - id: plan
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
+          GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
+        run: |
+          set +e
+          tofu plan -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
+          code=$?
+          cat plan.txt
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -ne 1 ]
+      - if: always() && github.event_name == 'pull_request' && steps.plan.outcome != 'skipped'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DIR: ${{ matrix.dir }}
+          EXITCODE: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const dir = process.env.DIR;
+            const marker = `<!-- tofu-plan:${dir} -->`;
+            const status = { '0': '✅ No changes', '2': '📝 Changes' }[process.env.EXITCODE] ?? '❌ Failed';
+
+            let output = fs.existsSync(`${dir}/plan.txt`) ? fs.readFileSync(`${dir}/plan.txt`, 'utf8') : '';
+            const max = 60000;
+            if (output.length > max) output = '... (truncated)\n' + output.slice(-max);
+
+            const body = [
+              marker,
+              `### \`${dir}\`: ${status}`,
+              '',
+              '<details><summary>plan</summary>',
+              '',
+              '```',
+              output.trim(),
+              '```',
+              '</details>',
+              '',
+              `${context.payload.pull_request.head.sha} / [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+            ].join('\n');
+
+            const params = { owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number };
+            const comments = await github.paginate(github.rest.issues.listComments, params);
+            const existing = comments.find((c) => c.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...params, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...params, body });
+            }
+
+  # ブランチ保護の必須チェック用。plan は matrix でジョブ名が変わりスキップもされるため、結果をここで集約する。
+  ci:
+    needs: [changes, fmt, plan]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+
+  apply:
+    needs: [changes, fmt]
+    if: github.event_name == 'push' && needs.changes.outputs.dirs != '[]'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJSON(needs.changes.outputs.dirs) }}
+    concurrency:
+      group: tofu-apply-${{ matrix.dir }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-tofu
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: tofu-apply@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+      - id: secrets
+        uses: google-github-actions/get-secretmanager-secrets@bc9c54b29fdffb8a47776820a7d26e77b379d262 # v3.0.0
+        with:
+          secrets: |-
+            cloudflare-api-token:${{ env.GCP_PROJECT_ID }}/cloudflare-api-token-apply
+      - id: github-app-key
+        if: vars.TOFU_GITHUB_APPLY_APP_CLIENT_ID != ''
+        uses: google-github-actions/get-secretmanager-secrets@bc9c54b29fdffb8a47776820a7d26e77b379d262 # v3.0.0
+        with:
+          secrets: |-
+            private-key:${{ env.GCP_PROJECT_ID }}/github-app-private-key-apply
+      - id: github-app
+        if: steps.github-app-key.outcome == 'success'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.TOFU_GITHUB_APPLY_APP_CLIENT_ID }}
+          private-key: ${{ steps.github-app-key.outputs.private-key }}
+          owner: ${{ github.repository_owner }}
+      - run: tofu init
+      - env:
+          CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
+          GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
+        run: tofu apply -auto-approve -no-color
