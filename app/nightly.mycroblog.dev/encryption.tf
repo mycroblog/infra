@@ -12,23 +12,14 @@ terraform {
       keys = key_provider.gcp_kms.tfstate
     }
 
-    # 平文の state からの移行用。全 state の暗号化後に削除する
-    method "unencrypted" "migrate" {}
-
     state {
-      method = method.aes_gcm.tfstate
-
-      fallback {
-        method = method.unencrypted.migrate
-      }
+      method   = method.aes_gcm.tfstate
+      enforced = true
     }
 
     plan {
-      method = method.aes_gcm.tfstate
-
-      fallback {
-        method = method.unencrypted.migrate
-      }
+      method   = method.aes_gcm.tfstate
+      enforced = true
     }
   }
 }
