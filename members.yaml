@@ -1,8 +1,8 @@
-# Organization のメンバーと、所属するメーリングリスト。
+# Organization のメンバー。メーリングリスト、GitHub Organization のメンバーとチームを同期する。
 # 転送先のメールアドレスは公開リポジトリに置かず、Secret Manager の member-emails に
 # {"<GitHub login>": "<email>"} の JSON で登録する。
 
-# <name>@mycroblog.dev として作成するメーリングリスト
+# <name>@mycroblog.dev として作成するメーリングリスト。GitHub には同名のチームを作る。
 lists:
   - hello
   - admin
@@ -12,8 +12,11 @@ lists:
   - gcp-organization-admins
 
 # GitHub login をキーにする
+#   github_role: GitHub Organization での役割 (admin: owner / member)
+#   lists: 所属するメーリングリスト (= GitHub チーム)
 members:
   rosylilly:
+    github_role: admin
     lists:
       - hello
       - admin
