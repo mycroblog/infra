@@ -36,3 +36,26 @@ resource "google_secret_manager_secret_iam_member" "ci" {
   role      = "roles/secretmanager.secretAccessor"
   member    = each.value
 }
+
+# メンバーの転送先メールアドレス。公開リポジトリに個人のアドレスを置かないため Secret Manager で管理する。
+# 値は {"<GitHub login>": "<email>"} の JSON で、members.yaml の全メンバー分を登録すること。
+resource "google_secret_manager_secret" "member_emails" {
+  secret_id = "member-emails"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
+resource "google_secret_manager_secret_iam_member" "member_emails" {
+  for_each = {
+    plan  = google_service_account.tofu_plan.member
+    apply = google_service_account.tofu_apply.member
+  }
+
+  secret_id = google_secret_manager_secret.member_emails.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = each.value
+}
