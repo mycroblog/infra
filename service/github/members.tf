@@ -4,7 +4,12 @@ locals {
 
   team_memberships = merge([
     for login, member in local.directory.members : {
-      for list in member.lists : "${list}/${login}" => { team = list, username = login }
+      for list in member.lists : "${list}/${login}" => {
+        team     = list
+        username = login
+        # Organization の owner はチームでは常に maintainer として扱われる
+        role = member.github_role == "admin" ? "maintainer" : "member"
+      }
     }
   ]...)
 }
@@ -33,5 +38,5 @@ resource "github_team_membership" "member" {
 
   team_id  = github_team.list[each.value.team].id
   username = github_membership.member[each.value.username].username
-  role     = "member"
+  role     = each.value.role
 }
