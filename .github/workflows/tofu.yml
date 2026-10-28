@@ -21,7 +21,7 @@ env:
 # apply 用の SA / 認証情報は production environment (main ブランチ限定) からのみ利用できる。
 jobs:
   # 変更のあったルートモジュール (service/*, app/*) を列挙する。
-  # workflow 自体や .tool-versions が変わった場合、手動実行の場合は全ディレクトリが対象。
+  # workflow 自体や .tool-versions, members.yaml が変わった場合、手動実行の場合は全ディレクトリが対象。
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -39,7 +39,7 @@ jobs:
           all=$(find service app -mindepth 2 -maxdepth 2 -name '*.tf' -printf '%h\n' | sort -u)
           if [ "$EVENT_NAME" = workflow_dispatch ] || ! changed=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null); then
             dirs="$all"
-          elif grep -qE '^(\.github/(workflows/tofu\.yml|actions/setup-tofu/)|\.tool-versions$)' <<<"$changed"; then
+          elif grep -qE '^(\.github/(workflows/tofu\.yml|actions/setup-tofu/)|\.tool-versions$|members\.yaml$)' <<<"$changed"; then
             dirs="$all"
           else
             dirs=$(grep -oE '^(service|app)/[^/]+/' <<<"$changed" | sed 's|/$||' | sort -u | grep -Fx -f <(echo "$all") || true)
