@@ -7,7 +7,8 @@ resource "github_repository" "infra" {
   name       = "infra"
   visibility = "public"
 
-  has_issues      = true
+  # 外部から Issue を作成させないため無効にしている
+  has_issues      = false
   has_projects    = true
   has_wiki        = true
   has_discussions = false
@@ -49,4 +50,20 @@ resource "github_repository_dependabot_security_updates" "infra" {
   enabled    = true
 
   depends_on = [github_repository_vulnerability_alerts.infra]
+}
+
+# PR の作成を collaborator に限定する。
+# provider (6.13.0) が pull_request_creation_policy に未対応のため、apply 時に API で設定している。
+# GitHub 上で変更されてもドリフトは検出されない。
+# provider が対応したら (integrations/terraform-provider-github#3349) github_repository に移すこと。
+resource "terraform_data" "infra_pull_request_creation_policy" {
+  triggers_replace = {
+    repository = github_repository.infra.full_name
+    policy     = "collaborators_only"
+  }
+
+  # GITHUB_TOKEN (apply 用 GitHub App のトークン) で実行する
+  provisioner "local-exec" {
+    command = "gh api --method PATCH repos/${self.triggers_replace.repository} -f pull_request_creation_policy=${self.triggers_replace.policy} --silent"
+  }
 }
