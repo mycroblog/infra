@@ -56,7 +56,7 @@ resource "github_repository_dependabot_security_updates" "my" {
   depends_on = [github_repository_vulnerability_alerts.my]
 }
 
-# main への変更は merge queue 経由のみとし、check の成功を必須にする。
+# main への変更は merge queue 経由のみとし、check の成功を必須にする。admin もバイパスできない。
 # NOTE: provider は pull_request の require_extra_approval_for_unattributed_changes に未対応。
 # ruleset を更新すると既定値に戻る可能性があるため、apply 後に GitHub 上で確認すること。
 resource "github_repository_ruleset" "my_main" {
@@ -70,12 +70,6 @@ resource "github_repository_ruleset" "my_main" {
       include = ["~DEFAULT_BRANCH"]
       exclude = []
     }
-  }
-
-  bypass_actors {
-    actor_id    = 5 # Repository admin
-    actor_type  = "RepositoryRole"
-    bypass_mode = "pull_request"
   }
 
   rules {
