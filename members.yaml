@@ -1,0 +1,23 @@
+# Organization のメンバーと、所属するメーリングリスト。
+# 転送先のメールアドレスは公開リポジトリに置かず、Secret Manager の member-emails に
+# {"<GitHub login>": "<email>"} の JSON で登録する。
+
+# <name>@mycroblog.dev として作成するメーリングリスト
+lists:
+  - hello
+  - admin
+  - dev
+  - ops
+  - gcp-billing-admins
+  - gcp-organization-admins
+
+# GitHub login をキーにする
+members:
+  rosylilly:
+    lists:
+      - hello
+      - admin
+      - dev
+      - ops
+      - gcp-billing-admins
+      - gcp-organization-admins
