@@ -72,6 +72,8 @@ jobs:
       needs.changes.outputs.dirs != '[]' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    # 後処理 (App トークンの revoke) が応答せず止まることがあるため
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -184,6 +186,8 @@ jobs:
     needs: [changes, fmt]
     if: github.event_name == 'push' && needs.changes.outputs.dirs != '[]'
     runs-on: ubuntu-latest
+    # 後処理 (App トークンの revoke) が応答せず止まることがあるため
+    timeout-minutes: 20
     environment: production
     permissions:
       contents: read

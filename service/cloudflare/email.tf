@@ -45,8 +45,21 @@ resource "cloudflare_workers_script" "mailing_list" {
     text = jsonencode(local.mailing_lists)
   }]
 
+  # API が既定値を補完するため、差分が出ないよう全項目を明示する
   observability = {
-    enabled = true
+    enabled            = true
+    head_sampling_rate = 1
+    logs = {
+      enabled            = true
+      head_sampling_rate = 1
+      invocation_logs    = true
+      persist            = true
+    }
+    traces = {
+      enabled            = false
+      head_sampling_rate = 1
+      persist            = true
+    }
   }
 
   lifecycle {
