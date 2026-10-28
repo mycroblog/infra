@@ -1,4 +1,5 @@
-# Organization のメンバー。メーリングリスト、GitHub Organization のメンバーとチームを同期する。
+# Organization のメンバー。メーリングリスト、GitHub Organization のメンバーとチーム、
+# Cloud Identity Group のメンバーを同期する。
 # 転送先のメールアドレスは公開リポジトリに置かず、Secret Manager の member-emails に
 # {"<GitHub login>": "<email>"} の JSON で登録する。
 
@@ -12,11 +13,13 @@ lists:
   - gcp-organization-admins
 
 # GitHub login をキーにする
-#   github_role: GitHub Organization での役割 (admin: owner / member)
-#   lists: 所属するメーリングリスト (= GitHub チーム)
+#   github_role: GitHub Organization での役割 (admin: owner / member)。admin は Cloud Identity Group でも OWNER になる
+#   google_account: Cloud Identity Group に追加する Google アカウント
+#   lists: 所属するメーリングリスト (= GitHub チーム, Cloud Identity Group)
 members:
   rosylilly:
     github_role: admin
+    google_account: rosylilly@mycroblog.dev
     lists:
       - hello
       - admin
