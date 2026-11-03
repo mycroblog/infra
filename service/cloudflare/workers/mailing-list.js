@@ -1,5 +1,5 @@
-// メーリングリストのアドレス宛のメールを、所属メンバーの転送先アドレスへ配送する。
-// MAILING_LISTS: {"<list address>": ["<member address>", ...]}
+// メーリングリストと個人宛アドレス宛のメールを、メンバーの転送先アドレスへ配送する。
+// MAILING_LISTS: {"<list or personal address>": ["<member address>", ...]}
 // 転送先は Email Routing で確認済みのアドレスである必要がある。
 
 const LOOP_HEADER = "X-Mycroblog-Mailing-List";

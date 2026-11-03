@@ -1,5 +1,7 @@
-# メーリングリスト。<list>@mycroblog.dev 宛のメールを Email Worker が各メンバーの転送先アドレスへ配送する。
+# メーリングリストと個人宛アドレス。<list>@mycroblog.dev と各メンバーの google_account 宛のメールを、
+# Email Worker が転送先アドレスへ配送する。
 # Email Routing のルールは転送先を 1 件しか持てないため、配送は Worker で行う。
+# 個人宛も forward アクションにすると、新メンバーの転送先が未確認の間はルールを作成できず apply が失敗するため Worker に揃えている。
 locals {
   directory = yamldecode(file("${path.module}/../../members.yaml"))
 
@@ -12,6 +14,17 @@ locals {
       for login, member in local.directory.members : local.member_emails[login] if contains(member.lists, list)
     ]
   }
+
+  # GitHub login => 個人宛アドレス。google_account が mycroblog.dev のメンバーのみ
+  personal_addresses = {
+    for login, member in local.directory.members : login => lower(member.google_account)
+    if endswith(lower(member.google_account), "@${local.domain}")
+  }
+
+  # 宛先アドレス => 転送先アドレス (sensitive)
+  mail_routes = merge(local.mailing_lists, {
+    for login, address in local.personal_addresses : address => [local.member_emails[login]]
+  })
 }
 
 data "google_secret_manager_secret_version" "member_emails" {
@@ -42,7 +55,7 @@ resource "cloudflare_workers_script" "mailing_list" {
   bindings = [{
     type = "secret_text"
     name = "MAILING_LISTS"
-    text = jsonencode(local.mailing_lists)
+    text = jsonencode(local.mail_routes)
   }]
 
   # API が既定値を補完するため、差分が出ないよう全項目を明示する
@@ -69,6 +82,13 @@ resource "cloudflare_workers_script" "mailing_list" {
       ])
       error_message = "members.yaml のメンバーが lists にないリストに所属しています。"
     }
+    precondition {
+      condition = length(distinct(concat(
+        [for list in local.directory.lists : "${list}@${local.domain}"],
+        values(local.personal_addresses),
+      ))) == length(local.directory.lists) + length(local.personal_addresses)
+      error_message = "members.yaml の google_account がメーリングリストまたは他のメンバーのアドレスと重複しています。"
+    }
   }
 }
 
@@ -91,6 +111,25 @@ resource "cloudflare_email_routing_rule" "mailing_list" {
     type  = "literal"
     field = "to"
     value = "${each.key}@${local.domain}"
+  }]
+
+  actions = [{
+    type  = "worker"
+    value = [cloudflare_workers_script.mailing_list.script_name]
+  }]
+}
+
+resource "cloudflare_email_routing_rule" "personal" {
+  for_each = local.personal_addresses
+
+  zone_id = local.zone_id
+  name    = "personal: ${each.key}"
+  enabled = true
+
+  matchers = [{
+    type  = "literal"
+    field = "to"
+    value = each.value
   }]
 
   actions = [{
