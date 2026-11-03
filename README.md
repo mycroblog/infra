@@ -11,7 +11,7 @@ mycroblog のインフラを OpenTofu で管理するリポジトリです。
 |---|---|
 | `service/gcp` | GCP プロジェクト (tfstate バケット, KMS, CI 用 Workload Identity, Secret Manager, Cloud Identity Group のメンバー) |
 | `service/github` | GitHub Organization (リポジトリ設定, ruleset, メンバーとチーム) |
-| `service/cloudflare` | Cloudflare (Email Routing によるメーリングリスト) |
+| `service/cloudflare` | Cloudflare (Email Routing によるメーリングリストと個人宛メールの転送) |
 | `app/*` | アプリケーションごとのリソース |
 | `members.yaml` | メンバーと所属リスト。上記の各サービスに同期される |
 
@@ -53,7 +53,8 @@ PR を作成できるのは collaborator のみで、Issue は無効にしてい
 
 3. マージして apply すると、以下が行われます。
    - GitHub Organization への招待が送られ、`lists` と同名のチームに追加されます。
-   - Cloudflare から転送先アドレスの確認メールが届きます。本人がリンクを開くまで、メーリングリストのメールは転送されません。
+   - Cloudflare から転送先アドレスの確認メールが届きます。本人がリンクを開くまで、メーリングリストと個人宛のメールは転送されません。
+   - `google_account` が `@mycroblog.dev` のアドレスであれば、そのアドレス宛のメールが転送先アドレスへ転送されます。
    - `lists` に `gcp-billing-admins` / `gcp-organization-admins` があれば、同名の Cloud Identity Group に追加されます。
 
 ### メンバーの削除
