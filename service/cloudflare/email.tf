@@ -25,6 +25,9 @@ locals {
   mail_routes = merge(local.mailing_lists, {
     for login, address in local.personal_addresses : address => [local.member_emails[login]]
   })
+
+  # 受信したメールをすべて破棄するアドレス
+  noreply_address = "noreply@${local.domain}"
 }
 
 data "google_secret_manager_secret_version" "member_emails" {
@@ -86,8 +89,9 @@ resource "cloudflare_workers_script" "mailing_list" {
       condition = length(distinct(concat(
         [for list in local.directory.lists : "${list}@${local.domain}"],
         values(local.personal_addresses),
-      ))) == length(local.directory.lists) + length(local.personal_addresses)
-      error_message = "members.yaml の google_account がメーリングリストまたは他のメンバーのアドレスと重複しています。"
+        [local.noreply_address],
+      ))) == length(local.directory.lists) + length(local.personal_addresses) + 1
+      error_message = "members.yaml のリストまたは google_account が他のアドレスと重複しています。"
     }
   }
 }
@@ -135,5 +139,22 @@ resource "cloudflare_email_routing_rule" "personal" {
   actions = [{
     type  = "worker"
     value = [cloudflare_workers_script.mailing_list.script_name]
+  }]
+}
+
+# 返信やバウンスを受け取らないよう、noreply 宛のメールは配送せずに破棄する
+resource "cloudflare_email_routing_rule" "noreply" {
+  zone_id = local.zone_id
+  name    = "noreply: drop all"
+  enabled = true
+
+  matchers = [{
+    type  = "literal"
+    field = "to"
+    value = local.noreply_address
+  }]
+
+  actions = [{
+    type = "drop"
   }]
 }
