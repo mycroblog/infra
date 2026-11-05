@@ -9,8 +9,8 @@ resource "github_repository" "infra" {
 
   # 外部から Issue を作成させないため無効にしている
   has_issues      = false
-  has_projects    = true
-  has_wiki        = true
+  has_projects    = false
+  has_wiki        = false
   has_discussions = false
 
   allow_merge_commit     = true
