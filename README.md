@@ -2,6 +2,7 @@
 
 [![OpenTofu](https://github.com/mycroblog/infra/actions/workflows/tofu.yml/badge.svg?branch=main)](https://github.com/mycroblog/infra/actions/workflows/tofu.yml?query=branch%3Amain)
 [![Dependabot](https://img.shields.io/badge/dependabot-enabled-025e8c?logo=dependabot)](.github/dependabot.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 mycroblog のインフラを OpenTofu で管理するリポジトリです。
 
@@ -66,3 +67,7 @@ PR を作成できるのは collaborator のみで、Issue は無効にしてい
 
 `members.yaml` の `lists` に追加すると、`<name>@mycroblog.dev` のメーリングリストと同名の GitHub チームが作成されます。
 Cloud Identity Group と同期する場合は、`service/gcp/groups.tf` の `cloud_identity_groups` に Group を追加してください。
+
+## ライセンス
+
+[MIT License](LICENSE)
