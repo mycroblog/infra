@@ -54,7 +54,7 @@ resource "google_project_service" "rc_management" {
 
 resource "google_project" "rc" {
   project_id      = local.rc_project_id
-  name            = "rc.mycroblog.dev"
+  name            = "rc-mycroblog-dev"
   org_id          = local.organization_id
   billing_account = local.billing_account
 
