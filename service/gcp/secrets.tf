@@ -9,6 +9,10 @@ locals {
     "cloudflare-api-token-apply"   = google_service_account.tofu_apply.member
     "github-app-private-key-plan"  = google_service_account.tofu_plan.member
     "github-app-private-key-apply" = google_service_account.tofu_apply.member
+    # Neon の API キーには読み取り専用の権限がないため、plan 用と apply 用で権限は同じになる。
+    # 漏洩したときに失効させるキーの範囲を分けるため、キーは別々に発行する。
+    "neon-api-key-plan"  = google_service_account.tofu_plan.member
+    "neon-api-key-apply" = google_service_account.tofu_apply.member
   }
 }
 
