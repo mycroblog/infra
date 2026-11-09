@@ -37,12 +37,14 @@ locals {
   ]
 }
 
-# SA の API 呼び出しは mycroblog の割り当てで行われるため、
-# プロジェクトの請求先の設定と組織ポリシーの操作に使う API を mycroblog 側で有効にしておく
+# SA の API 呼び出しは mycroblog の割り当てで行われるため、使う API を mycroblog 側でも有効にしておく。
+#   - cloudbilling, orgpolicy: プロジェクトの請求先の設定と組織ポリシーの操作
+#   - pubsub: app/rc.mycroblog.dev の topic の読み取り。Pub/Sub は呼び出し元の SA のプロジェクトを割り当て先にする
 resource "google_project_service" "rc_management" {
   for_each = toset([
     "cloudbilling.googleapis.com",
     "orgpolicy.googleapis.com",
+    "pubsub.googleapis.com",
   ])
 
   service            = each.value
