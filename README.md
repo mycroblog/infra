@@ -12,7 +12,7 @@ mycroblog のインフラを OpenTofu で管理するリポジトリです。
 |---|---|
 | `service/gcp` | GCP プロジェクト (tfstate バケット, KMS, CI 用 Workload Identity, Secret Manager, Cloud Identity Group のメンバー) と、インスタンスごとのプロジェクト (`mycroblog-rc-5996`) の作成 |
 | `service/github` | GitHub Organization (リポジトリ設定, ruleset, メンバーとチーム) |
-| `service/cloudflare` | Cloudflare (Email Routing によるメーリングリストと個人宛メールの転送、`noreply` 宛メールの破棄、Resend 用の DNS レコード、ドキュメントサイト `my-docs` の Custom Domain と www のリダイレクト) |
+| `service/cloudflare` | Cloudflare (Email Routing によるメーリングリストと個人宛メールの転送、`noreply` 宛メールの破棄、Resend 用の DNS レコード、ドキュメントサイト `my-docs` の Custom Domain と www のリダイレクト、ゾーン全体の設定 (Bot Fight Mode, Always Use HTTPS, SSL モード)) |
 | `app/*` | アプリケーションごとのリソース |
 | `members.yaml` | メンバーと所属リスト。上記の各サービスに同期される |
 
