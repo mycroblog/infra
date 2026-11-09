@@ -50,8 +50,9 @@ locals {
   # 作成時のイメージ。以降は upgrade.sh が変える
   image = "ghcr.io/mycroblog/my:0.1.0-rc.5@sha256:cf47c60218cb70e2b9305da41d20e6083885dbfa52336f7870ddb59940330a79"
 
-  cloudflare_zone_id = "d1efd91243643b316be9e4fa39dbd265" # mycroblog.dev
-  neon_org_id        = "org-summer-tree-22909412"
+  cloudflare_account_id = "994aaaf195ab62477609d5dd730e0b8f"
+  cloudflare_zone_id    = "d1efd91243643b316be9e4fa39dbd265" # mycroblog.dev
+  neon_org_id           = "org-summer-tree-22909412"
 }
 
 provider "google" {
@@ -90,12 +91,14 @@ module "secrets" {
     database_url_pooled = "my-database-url-pooled"
     smtp_password       = "my-smtp-password" # Resend の API キー。手動で登録する
     origin_secret       = "my-origin-secret"
+    voice_turn_token    = "my-voice-turn-cloudflare-api-token"
   }
-  write_keys = ["database_url", "database_url_pooled", "origin_secret"]
+  write_keys = ["database_url", "database_url_pooled", "origin_secret", "voice_turn_token"]
   write_values = {
     database_url        = module.db.connection_uri
     database_url_pooled = module.db.connection_uri_pooler
     origin_secret       = random_password.origin_secret.result
+    voice_turn_token    = cloudflare_calls_turn_app.voice.key
   }
 }
 
@@ -231,6 +234,14 @@ module "billing" {
   query_project = local.project_id
 }
 
+# ボイスチャット (voice = p2p) の TURN。ブラウザ同士が直接つながらないときに音声を中継する。
+# キーのトークンは provider に write-only の形がないため state に入り、secrets モジュールでサーバー用の Secret にも書き込む。
+# 料金は月 1,000 GB まで無料 (2026-10 時点)。
+resource "cloudflare_calls_turn_app" "voice" {
+  account_id = local.cloudflare_account_id
+  name       = "rc.mycroblog.dev voice"
+}
+
 module "app" {
   source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/app-gcp-cloud-run?ref=v0.1.0-rc.5&depth=1"
 
@@ -252,6 +263,16 @@ module "app" {
     MY_MEDIA_MAX_AV_BYTES = "31457280"
     # 請求先アカウントには mycroblog などの他のプロジェクトもあるため、rc の分だけを取り込む
     MY_BILLING_GCP_PROJECTS = local.project_id
+
+    # ボイスチャットは P2P。音声はブラウザ同士で直接やり取りし、サーバーは接続のためのメッセージだけを中継する。
+    # voice_ice_transport_policy は既定の all のため、参加者同士が互いの IP アドレスを知りうる (プライバシーポリシーに記載)。
+    MY_VOICE                        = "p2p"
+    MY_VOICE_STUN_URLS              = "stun:stun.cloudflare.com:3478"
+    MY_VOICE_TURN                   = "cloudflare"
+    MY_VOICE_TURN_CLOUDFLARE_KEY_ID = cloudflare_calls_turn_app.voice.key_id
+  }
+  secret_env = {
+    MY_VOICE_TURN_CLOUDFLARE_API_TOKEN = module.secrets.ids["voice_turn_token"]
   }
 }
 
