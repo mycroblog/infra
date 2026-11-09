@@ -10,8 +10,10 @@ import {
 }
 
 resource "github_repository" "my" {
-  name       = "my"
-  visibility = "public"
+  name         = "my"
+  description  = "my, the mycroblog server, speaks ActivityPub and is written in Go. Start on one small machine or a scale-to-zero container with SQLite. When your community grows, move to PostgreSQL, a job queue, a stream broker and separate web and worker processes: same code, same data."
+  homepage_url = "https://mycroblog.dev"
+  visibility   = "public"
 
   has_issues      = true
   has_projects    = false
