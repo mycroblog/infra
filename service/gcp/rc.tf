@@ -19,9 +19,10 @@ locals {
   rc_project_id = "mycroblog-rc-5996"
 
   # docs/operations/deploy-cloud-run.md (mycroblog/my) の「Enable the APIs」に、
-  # KEK 用の Cloud KMS と monitoring-gcp 用の Cloud Monitoring を加えたもの。
+  # KEK 用の Cloud KMS、monitoring-gcp 用の Cloud Monitoring、billing-gcp 用の BigQuery を加えたもの。
   # ingress に load balancer を使わないため compute.googleapis.com は有効にしない。
   rc_services = [
+    "bigquery.googleapis.com", # 料金の取り込みのクエリを rc の割り当てで実行する
     "cloudkms.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "cloudscheduler.googleapis.com",
