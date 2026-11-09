@@ -173,10 +173,12 @@ module "domain_mapping_media" {
   service_name = module.app.service_name
 }
 
-# proxy 越しで domain mapping の証明書が発行・更新されるかは確認されていない。
-# 証明書が発行されるまでは proxied = false にしておく。その間はヘッダーが付かないため、サーバーはヘルスチェック以外を 403 で拒否する。
+# domain mapping の証明書は、proxied = false で CNAME (ghs.googlehosted.com) のまま発行された (2026-11-09)。
+# proxy 越しで証明書が更新されるかは確認されていない (有効期限は 2027-02-07)。
+# 更新に失敗すると、SSL モードが strict のため Cloudflare が 526 を返す。
+# その場合は一時的に false に戻して更新させる。false の間はヘッダーが付かないため、サーバーはヘルスチェック以外を 403 で拒否する。
 locals {
-  cloudflare_proxied = false
+  cloudflare_proxied = true
 }
 
 # ゾーンには phase ごとに ruleset が 1 つしか作れない。そのため rc-media のルールは extra_rules でこちらの ruleset に入れる
