@@ -102,6 +102,13 @@ resource "google_project_iam_member" "rc_tofu_apply" {
   member  = google_service_account.tofu_apply.member
 }
 
+# 人による運用 (upgrade.sh / console.sh、ログの閲覧、障害対応) は組織の管理者が行う
+resource "google_project_iam_member" "rc_operators" {
+  project = google_project.rc.project_id
+  role    = "roles/owner"
+  member  = "group:gcp-organization-admins@mycroblog.dev"
+}
+
 output "rc_project_id" {
   value = google_project.rc.project_id
 }
