@@ -116,13 +116,14 @@ module "db" {
   pooled_url_secret_id = module.secrets.ids["database_url_pooled"]
 }
 
-# Neon の Free プランは月 100 CU-h まで。毎分の tick では compute が止まらず使い切るため、10 分ごとにしている
+# Neon の Free プランは月 100 CU-h まで。毎分の tick では compute が止まらず使い切る。
+# uptime check でも DB を起こすため、両方で枠に収まるよう 20 分ごとにしている (定期ジョブは最大 20 分遅れる)
 module "queue" {
   source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/queue-gcp-cloud-tasks?ref=v0.1.0-rc.4&depth=1"
 
   project_id    = local.project_id
   region        = local.region
-  tick_schedule = "*/10 * * * *"
+  tick_schedule = "*/20 * * * *"
 }
 
 module "blob" {
@@ -201,14 +202,16 @@ module "ingress" {
   extra_rules      = module.media.rules
 }
 
-# uptime check を /healthz に向け、Neon を起こさないようにする。DB の障害は MyNotReady と HTTP のアラートで検知する
+# モジュールの README は Neon を起こさないよう /healthz を勧めているが、Cloud Run では /healthz が予約されていて、
+# Google のフロントエンドが 404 を返す (コンテナに届かない)。そのため DB を起こす /api/v1/instance/health を使う。
+# 結果はプロセスで 60 秒キャッシュされる。900s ごとの check でどれだけ Neon が起きているかは、実際の使用量で確認すること
 module "monitoring" {
   source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/monitoring-gcp?ref=v0.1.0-rc.4&depth=1"
 
   project_id          = local.project_id
   host                = local.host
   notification_emails = ["ops@mycroblog.dev"]
-  uptime_path         = "/healthz"
+  uptime_path         = "/api/v1/instance/health"
   # Free プランの 1 GB から余裕を引いた値
   database_size_limit_bytes = 800 * 1000 * 1000
 }
