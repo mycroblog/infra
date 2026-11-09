@@ -17,6 +17,19 @@ updates:
   - package-ecosystem: opentofu
     directories:
       - /service/*
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      providers:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps
+
+  # mycroblog/my のモジュールを使うディレクトリ。provider はモジュールが許す範囲に留める
+  - package-ecosystem: opentofu
+    directories:
       - /app/*
     schedule:
       interval: weekly
@@ -25,5 +38,11 @@ updates:
     groups:
       providers:
         patterns: ["*"]
+    ignore:
+      # モジュールが >= 7.0, < 8.0 に固定している
+      - dependency-name: hashicorp/google
+        versions: [">= 8.0"]
+      # db-neon が完全一致で固定している
+      - dependency-name: kislerdm/neon
     commit-message:
       prefix: deps

@@ -100,6 +100,7 @@ jobs:
         with:
           secrets: |-
             cloudflare-api-token:${{ env.GCP_PROJECT_ID }}/cloudflare-api-token-plan
+            neon-api-key:${{ env.GCP_PROJECT_ID }}/neon-api-key-plan
       - id: github-app-key
         if: vars.TOFU_GITHUB_PLAN_APP_CLIENT_ID != ''
         uses: google-github-actions/get-secretmanager-secrets@bc9c54b29fdffb8a47776820a7d26e77b379d262 # v3.0.0
@@ -126,6 +127,7 @@ jobs:
       - id: plan
         env:
           CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
+          NEON_API_KEY: ${{ steps.secrets.outputs.neon-api-key }}
           GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
         run: |
           set +e
@@ -214,6 +216,7 @@ jobs:
         with:
           secrets: |-
             cloudflare-api-token:${{ env.GCP_PROJECT_ID }}/cloudflare-api-token-apply
+            neon-api-key:${{ env.GCP_PROJECT_ID }}/neon-api-key-apply
       - id: github-app-key
         if: vars.TOFU_GITHUB_APPLY_APP_CLIENT_ID != ''
         uses: google-github-actions/get-secretmanager-secrets@bc9c54b29fdffb8a47776820a7d26e77b379d262 # v3.0.0
@@ -230,5 +233,6 @@ jobs:
       - run: tofu init
       - env:
           CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
+          NEON_API_KEY: ${{ steps.secrets.outputs.neon-api-key }}
           GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
         run: tofu apply -auto-approve -no-color -concise
