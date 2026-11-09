@@ -218,6 +218,19 @@ module "monitoring" {
   database_size_limit_bytes = 800 * 1000 * 1000
 }
 
+# GCP の利用料金の取り込み。Cloud Billing の BigQuery エクスポートは請求先アカウント単位で、
+# 書き出し先のデータセットは mycroblog にある (service/gcp/billing.tf)。
+# ここではその閲覧権限と、rc でのクエリの実行権限を得て、MY_BILLING_GCP_PROJECTS で rc のプロジェクトの分だけを取り込む。
+module "billing" {
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/billing-gcp?ref=v0.1.0-rc.5&depth=1"
+
+  project_id         = "mycroblog"
+  billing_account_id = "013C46-7FFDEE-81C265"
+  create_dataset     = false
+  # クエリは rc で実行し、スキャン量も rc に計上する
+  query_project = local.project_id
+}
+
 module "app" {
   source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/app-gcp-cloud-run?ref=v0.1.0-rc.5&depth=1"
 
@@ -230,13 +243,15 @@ module "app" {
   service_ingress = "all"
 
   backends = [
-    module.secrets, module.kek, module.db, module.queue, module.blob, module.stream, module.mail, module.monitoring, module.ingress,
+    module.secrets, module.kek, module.db, module.queue, module.blob, module.stream, module.mail, module.monitoring, module.ingress, module.billing,
     { platform = module.media.platform, env = module.media.env },
   ]
 
   env = {
     # Cloud Run は 32 MiB を超える HTTP/1 リクエストを拒否するため、サーバー側の上限をその下にする
     MY_MEDIA_MAX_AV_BYTES = "31457280"
+    # 請求先アカウントには mycroblog などの他のプロジェクトもあるため、rc の分だけを取り込む
+    MY_BILLING_GCP_PROJECTS = local.project_id
   }
 }
 
