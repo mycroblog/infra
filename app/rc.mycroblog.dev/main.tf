@@ -48,7 +48,7 @@ locals {
   media_host = "rc-media.mycroblog.dev" # Universal SSL の対象になるよう 1 階層にしている
 
   # 作成時のイメージ。以降は upgrade.sh が変える
-  image = "ghcr.io/mycroblog/my:0.1.0-rc.4@sha256:a61ad6f977ba91eaa4aa3e6f4ebad148eea5e2c805439fe1a797b67c7e51f21a"
+  image = "ghcr.io/mycroblog/my:0.1.0-rc.5@sha256:cf47c60218cb70e2b9305da41d20e6083885dbfa52336f7870ddb59940330a79"
 
   cloudflare_zone_id = "d1efd91243643b316be9e4fa39dbd265" # mycroblog.dev
   neon_org_id        = "org-summer-tree-22909412"
@@ -80,7 +80,7 @@ resource "random_password" "origin_secret" {
 }
 
 module "secrets" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/secrets-gcp-secret-manager?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/secrets-gcp-secret-manager?ref=v0.1.0-rc.5&depth=1"
 
   project_id         = local.project_id
   secrets            = { MY_VAPID_PRIVATE_KEY = "my-vapid-key" }
@@ -100,7 +100,7 @@ module "secrets" {
 }
 
 module "kek" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/kek-gcp-kms?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/kek-gcp-kms?ref=v0.1.0-rc.5&depth=1"
 
   project_id = local.project_id
   location   = local.region
@@ -108,7 +108,7 @@ module "kek" {
 
 # パスワードが state に入る。provider は unmaintained (モジュールの README 参照)
 module "db" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/db-neon?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/db-neon?ref=v0.1.0-rc.5&depth=1"
 
   org_id               = local.neon_org_id
   region_id            = "aws-ap-southeast-1"
@@ -119,7 +119,7 @@ module "db" {
 # Neon の Free プランは月 100 CU-h まで。毎分の tick では compute が止まらず使い切る。
 # uptime check でも DB を起こすため、両方で枠に収まるよう 20 分ごとにしている (定期ジョブは最大 20 分遅れる)
 module "queue" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/queue-gcp-cloud-tasks?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/queue-gcp-cloud-tasks?ref=v0.1.0-rc.5&depth=1"
 
   project_id    = local.project_id
   region        = local.region
@@ -127,7 +127,7 @@ module "queue" {
 }
 
 module "blob" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/blob-gcp-gcs?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/blob-gcp-gcs?ref=v0.1.0-rc.5&depth=1"
 
   project_id  = local.project_id
   bucket_name = "${local.project_id}-media"
@@ -135,14 +135,14 @@ module "blob" {
 }
 
 module "stream" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/stream-gcp-pubsub?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/stream-gcp-pubsub?ref=v0.1.0-rc.5&depth=1"
 
   project_id = local.project_id
 }
 
 # Resend の SMTP。mycroblog.dev は service/cloudflare/dns.tf で Resend のドメイン認証を済ませている
 module "mail" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/mail-smtp?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/mail-smtp?ref=v0.1.0-rc.5&depth=1"
 
   from               = "noreply@mycroblog.dev"
   host               = "smtp.resend.com"
@@ -156,7 +156,7 @@ module "mail" {
 # domain mapping は backends に入れない (誰が接続してくるかは ingress-cloudflare-app が決める)。
 # apply する SA (tofu-apply) が Search Console で mycroblog.dev の確認済み所有者になっている必要がある。
 module "domain_mapping_app" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-gcp-domain-mapping?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-gcp-domain-mapping?ref=v0.1.0-rc.5&depth=1"
 
   project_id   = local.project_id
   region       = local.region
@@ -165,7 +165,7 @@ module "domain_mapping_app" {
 }
 
 module "domain_mapping_media" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-gcp-domain-mapping?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-gcp-domain-mapping?ref=v0.1.0-rc.5&depth=1"
 
   project_id   = local.project_id
   region       = local.region
@@ -183,7 +183,7 @@ locals {
 
 # ゾーンには phase ごとに ruleset が 1 つしか作れない。そのため rc-media のルールは extra_rules でこちらの ruleset に入れる
 module "media" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-cloudflare-media?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-cloudflare-media?ref=v0.1.0-rc.5&depth=1"
 
   zone_id         = local.cloudflare_zone_id
   host            = local.media_host
@@ -193,7 +193,7 @@ module "media" {
 }
 
 module "ingress" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-cloudflare-app?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-cloudflare-app?ref=v0.1.0-rc.5&depth=1"
 
   zone_id          = local.cloudflare_zone_id
   host             = local.host
@@ -208,7 +208,7 @@ module "ingress" {
 # Google のフロントエンドが 404 を返す (コンテナに届かない)。そのため DB を起こす /api/v1/instance/health を使う。
 # 結果はプロセスで 60 秒キャッシュされる。900s ごとの check でどれだけ Neon が起きているかは、実際の使用量で確認すること
 module "monitoring" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/monitoring-gcp?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/monitoring-gcp?ref=v0.1.0-rc.5&depth=1"
 
   project_id          = local.project_id
   host                = local.host
@@ -219,7 +219,7 @@ module "monitoring" {
 }
 
 module "app" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/app-gcp-cloud-run?ref=v0.1.0-rc.4&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/app-gcp-cloud-run?ref=v0.1.0-rc.5&depth=1"
 
   project_id      = local.project_id
   region          = local.region
