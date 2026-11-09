@@ -1,6 +1,22 @@
 # ゾーン全体に効く設定。rc.mycroblog.dev などの mycroblog (ActivityPub) のインスタンスを Cloudflare の proxy 越しに公開するための前提。
 # mycroblog/my の docs/operations/deploy-cloud-run.md の「Cloudflare」を参照。
 
+# どれもゾーンに最初からある設定なので、import して現在の値との差分を plan で確認する
+import {
+  to = cloudflare_bot_management.zone
+  id = local.zone_id
+}
+
+import {
+  to = cloudflare_zone_setting.always_use_https
+  id = "${local.zone_id}/always_use_https"
+}
+
+import {
+  to = cloudflare_zone_setting.ssl
+  id = "${local.zone_id}/ssl"
+}
+
 # Bot Fight Mode は除外ルールを設定できない。そのため /ap/ や /.well-known/ に来る他のサーバーからのリクエストにも
 # チャレンジを返してしまい、連合が壊れる。
 resource "cloudflare_bot_management" "zone" {
