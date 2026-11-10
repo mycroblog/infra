@@ -11,6 +11,7 @@ lists:
   - ops
   - gcp-billing-admins
   - gcp-organization-admins
+  - sponsors
 
 # GitHub login をキーにする
 #   github_role: GitHub Organization での役割 (admin: owner / member)。admin は Cloud Identity Group でも OWNER になる
@@ -27,3 +28,4 @@ members:
       - ops
       - gcp-billing-admins
       - gcp-organization-admins
+      - sponsors
