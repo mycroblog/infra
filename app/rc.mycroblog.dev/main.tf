@@ -206,16 +206,14 @@ module "ingress" {
   extra_rules      = module.media.rules
 }
 
-# モジュールの README は Neon を起こさないよう /healthz を勧めているが、Cloud Run では /healthz が予約されていて、
-# Google のフロントエンドが 404 を返す (コンテナに届かない)。そのため DB を起こす /api/v1/instance/health を使う。
-# 結果はプロセスで 60 秒キャッシュされる。900s ごとの check でどれだけ Neon が起きているかは、実際の使用量で確認すること
+# uptime check はモジュールの既定の /health/live を使う。DB に触れないので Neon を起こさず、Free プランの枠を使わない。
+# そのぶん DB の障害は外からは見えない。MyNotReady と HTTP のアラートは、何かがサーバーを呼んだときに気づく
 module "monitoring" {
   source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/monitoring-gcp?ref=v0.1.0-rc.10&depth=1"
 
   project_id          = local.project_id
   host                = local.host
   notification_emails = ["ops@mycroblog.dev"]
-  uptime_path         = "/api/v1/instance/health"
   # Free プランの 1 GB から余裕を引いた値
   database_size_limit_bytes = 800 * 1000 * 1000
 }
