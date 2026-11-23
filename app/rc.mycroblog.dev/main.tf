@@ -262,7 +262,9 @@ module "app" {
   # v0.1.0-rc.11 はテーマの旧テーブル (instance_theme_revisions, instance_theme_tokens) を DROP するため -allow-destructive が要る。
   # allow_destructive_for は version と一致するときだけ効くので、残しておいても次のリリースでは効かない
   migration = {
-    script                = abspath("${path.root}/.terraform/modules/app/deploy/opentofu/migrate.sh")
+    # 暫定で、修正を当てた migrate.sh を使う (このディレクトリの migrate.sh の先頭を参照)。
+    # 修正の入ったリリースでは "${path.root}/.terraform/modules/app/deploy/opentofu/migrate.sh" に戻す
+    script                = abspath("${path.root}/migrate.sh")
     version               = local.version
     allow_destructive_for = "0.1.0-rc.11"
   }
