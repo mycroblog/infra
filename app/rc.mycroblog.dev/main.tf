@@ -6,9 +6,12 @@
 #   - メディア: rc-media.mycroblog.dev から Cloudflare のキャッシュ越しに配信する
 #   - 監視: monitoring-gcp を入れる
 # 手順は mycroblog/my の docs/operations/deploy-cloud-run.md を参照。
+#   - モジュール: 公開モジュール mycroblog-gcp ではなく、modules/internal の個別モジュールを組み合わせている
+#     (internal のモジュールは入出力の互換性が保証されないため、更新時はリリース間の差分を確認すること)
 #
 # モジュールの ref と image は同じリリースに揃えること。
-# image は既存のサービスとジョブには反映されず、更新は upgrade.sh で行う。
+# image を変えた apply がアップグレードになる。apply 中に migrate.sh がマイグレーションジョブで my upgrade を実行し、
+# 成功してからサービスが新しいイメージに移る。apply するマシン (CI) に gcloud と jq が必要。
 
 terraform {
   required_version = ">= 1.11"
@@ -47,8 +50,9 @@ locals {
   host       = "rc.mycroblog.dev"
   media_host = "rc-media.mycroblog.dev" # Universal SSL の対象になるよう 1 階層にしている
 
-  # 作成時のイメージ。以降は upgrade.sh が変える
-  image = "ghcr.io/mycroblog/my:0.1.0-rc.10@sha256:2b8aeee09f0a9e2a4afb69bc7ef485309a85859523291cf440520673fc2defd7"
+  # サーバーのイメージ。変えると apply がアップグレードになる (module "app" の migration を参照)
+  version = "0.1.0-rc.11"
+  image   = "ghcr.io/mycroblog/my:${local.version}@sha256:dcdadb3e29f293091a78af50882df4307ebe37c2385e0227f8e1af0fdafd53bc"
 
   cloudflare_zone_id = "d1efd91243643b316be9e4fa39dbd265" # mycroblog.dev
   neon_org_id        = "org-summer-tree-22909412"
@@ -80,7 +84,7 @@ resource "random_password" "origin_secret" {
 }
 
 module "secrets" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/secrets-gcp-secret-manager?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/secrets-gcp-secret-manager?ref=v0.1.0-rc.11&depth=1"
 
   project_id         = local.project_id
   secrets            = { MY_VAPID_PRIVATE_KEY = "my-vapid-key" }
@@ -102,7 +106,7 @@ module "secrets" {
 }
 
 module "kek" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/kek-gcp-kms?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/kek-gcp-kms?ref=v0.1.0-rc.11&depth=1"
 
   project_id = local.project_id
   location   = local.region
@@ -110,7 +114,7 @@ module "kek" {
 
 # パスワードが state に入る。provider は unmaintained (モジュールの README 参照)
 module "db" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/db-neon?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/db-neon?ref=v0.1.0-rc.11&depth=1"
 
   org_id               = local.neon_org_id
   region_id            = "aws-ap-southeast-1"
@@ -121,7 +125,7 @@ module "db" {
 # Neon の Free プランは月 100 CU-h まで。毎分の tick では compute が止まらず使い切る。
 # uptime check でも DB を起こすため、両方で枠に収まるよう 20 分ごとにしている (定期ジョブは最大 20 分遅れる)
 module "queue" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/queue-gcp-cloud-tasks?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/queue-gcp-cloud-tasks?ref=v0.1.0-rc.11&depth=1"
 
   project_id    = local.project_id
   region        = local.region
@@ -129,7 +133,7 @@ module "queue" {
 }
 
 module "blob" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/blob-gcp-gcs?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/blob-gcp-gcs?ref=v0.1.0-rc.11&depth=1"
 
   project_id  = local.project_id
   bucket_name = "${local.project_id}-media"
@@ -137,14 +141,14 @@ module "blob" {
 }
 
 module "stream" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/stream-gcp-pubsub?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/stream-gcp-pubsub?ref=v0.1.0-rc.11&depth=1"
 
   project_id = local.project_id
 }
 
 # Resend の SMTP。mycroblog.dev は service/cloudflare/dns.tf で Resend のドメイン認証を済ませている
 module "mail" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/mail-smtp?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/mail-smtp?ref=v0.1.0-rc.11&depth=1"
 
   from               = "noreply@mycroblog.dev"
   host               = "smtp.resend.com"
@@ -158,7 +162,7 @@ module "mail" {
 # domain mapping は backends に入れない (誰が接続してくるかは ingress-cloudflare-app が決める)。
 # apply する SA (tofu-apply) が Search Console で mycroblog.dev の確認済み所有者になっている必要がある。
 module "domain_mapping_app" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-gcp-domain-mapping?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/ingress-gcp-domain-mapping?ref=v0.1.0-rc.11&depth=1"
 
   project_id   = local.project_id
   region       = local.region
@@ -167,7 +171,7 @@ module "domain_mapping_app" {
 }
 
 module "domain_mapping_media" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-gcp-domain-mapping?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/ingress-gcp-domain-mapping?ref=v0.1.0-rc.11&depth=1"
 
   project_id   = local.project_id
   region       = local.region
@@ -185,7 +189,7 @@ locals {
 
 # ゾーンには phase ごとに ruleset が 1 つしか作れない。そのため rc-media のルールは extra_rules でこちらの ruleset に入れる
 module "media" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-cloudflare-media?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/ingress-cloudflare-media?ref=v0.1.0-rc.11&depth=1"
 
   zone_id         = local.cloudflare_zone_id
   host            = local.media_host
@@ -195,7 +199,7 @@ module "media" {
 }
 
 module "ingress" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/ingress-cloudflare-app?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/ingress-cloudflare-app?ref=v0.1.0-rc.11&depth=1"
 
   zone_id          = local.cloudflare_zone_id
   host             = local.host
@@ -209,20 +213,29 @@ module "ingress" {
 # uptime check はモジュールの既定の /health/live を使う。DB に触れないので Neon を起こさず、Free プランの枠を使わない。
 # そのぶん DB の障害は外からは見えない。MyNotReady と HTTP のアラートは、何かがサーバーを呼んだときに気づく
 module "monitoring" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/monitoring-gcp?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/monitoring-gcp?ref=v0.1.0-rc.11&depth=1"
 
   project_id          = local.project_id
   host                = local.host
   notification_emails = ["ops@mycroblog.dev"]
   # Free プランの 1 GB から余裕を引いた値
   database_size_limit_bytes = 800 * 1000 * 1000
+  metrics_exporter          = lookup(module.observability.env, "MY_METRICS_EXPORTER", "none")
+}
+
+# メトリクス・トレース・エラーレポートの送り先。Cloud Run が送るものを Cloud Monitoring / Cloud Trace / Error Reporting が読むため、
+# サーバー自身は何もエクスポートしない。v0.1.0-rc.11 から monitoring-gcp に代わって MY_METRICS_EXPORTER を設定する
+module "observability" {
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/observability-gcp?ref=v0.1.0-rc.11&depth=1"
+
+  project_id = local.project_id
 }
 
 # GCP の利用料金の取り込み。Cloud Billing の BigQuery エクスポートは請求先アカウント単位で、
 # 書き出し先のデータセットは mycroblog にある (service/gcp/billing.tf)。
 # ここではその閲覧権限と、rc でのクエリの実行権限を得て、MY_BILLING_GCP_PROJECTS で rc のプロジェクトの分だけを取り込む。
 module "billing" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/billing-gcp?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/billing-gcp?ref=v0.1.0-rc.11&depth=1"
 
   project_id         = "mycroblog"
   billing_account_id = "013C46-7FFDEE-81C265"
@@ -239,18 +252,27 @@ locals {
 }
 
 module "app" {
-  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/app-gcp-cloud-run?ref=v0.1.0-rc.10&depth=1"
+  source = "git::https://github.com/mycroblog/my.git//deploy/opentofu/modules/internal/app-gcp-cloud-run?ref=v0.1.0-rc.11&depth=1"
 
-  project_id      = local.project_id
-  region          = local.region
-  image           = local.image
+  project_id = local.project_id
+  region     = local.region
+  image      = local.image
+  # 新しいイメージでは、ジョブがイメージを受け取ったあと migrate.sh が my upgrade を実行し、成功してからサービスが移る。
+  # 失敗すると apply がそこで止まり、サービスは前のリビジョンのまま。同じイメージで apply し直すとマイグレーションから再実行される。
+  # v0.1.0-rc.11 はテーマの旧テーブル (instance_theme_revisions, instance_theme_tokens) を DROP するため -allow-destructive が要る。
+  # allow_destructive_for は version と一致するときだけ効くので、残しておいても次のリリースでは効かない
+  migration = {
+    script                = abspath("${path.root}/.terraform/modules/app/deploy/opentofu/migrate.sh")
+    version               = local.version
+    allow_destructive_for = "0.1.0-rc.11"
+  }
   host            = local.host
   console_enabled = var.console_enabled
   # Cloudflare からの接続はインターネットから来る。run.app の URL も開いたままだが、origin secret のないリクエストはサーバーが拒否する
   service_ingress = "all"
 
   backends = [
-    module.secrets, module.kek, module.db, module.queue, module.blob, module.stream, module.mail, module.monitoring, module.ingress, module.billing,
+    module.secrets, module.kek, module.db, module.queue, module.blob, module.stream, module.mail, module.monitoring, module.observability, module.ingress, module.billing,
     { platform = module.media.platform, env = module.media.env },
   ]
 
